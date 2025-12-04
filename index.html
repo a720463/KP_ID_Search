@@ -24,24 +24,26 @@
     <div id="root"></div>
     <script type="module">
         // External Imports
-        import React, { useState, useEffect, useCallback } from 'react';
+        import React, { useState, useEffect, useCallback, useMemo } from 'react';
         import ReactDOM from 'react-dom/client';
         import { initializeApp } from 'firebase/app';
-        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy, Timestamp } from 'firebase/firestore';
 
-        // types.ts content
-        /**
-         * @typedef {object} Entry
-         * @property {string} id
-         * @property {string} lineName
-         * @property {string} gameId
-         */
-        // Using interface for TypeScript, which will be stripped in JS output, so using JSDoc for clarity
-        // interface Entry {
+        // types.ts content (as JS structures)
+        // Represents an entry in the database
+        // type Entry = {
         //   id: string;
         //   lineName: string;
         //   gameId: string;
-        // }
+        //   createdAt: Timestamp;
+        //   updatedAt?: Timestamp;
+        // };
+
+        // Represents data submitted from the form
+        // type EntryFormData = {
+        //   lineName: string;
+        //   gameId: string;
+        // };
 
         // firebaseConfig.ts content
         const firebaseConfig = {
@@ -63,10 +65,16 @@
           const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'asc'));
           
           const unsubscribe = onSnapshot(q, (snapshot) => {
-            const entries = snapshot.docs.map(d => ({
-              id: d.id,
-              ...d.data()
-            }));
+            const entries = snapshot.docs.map(d => {
+                const data = d.data();
+                return {
+                    id: d.id,
+                    lineName: data.lineName,
+                    gameId: data.gameId,
+                    createdAt: data.createdAt, // Firebase returns Timestamp directly
+                    updatedAt: data.updatedAt, // Firebase returns Timestamp directly, might be undefined
+                };
+            });
             callback(entries);
           }, (error) => {
             console.error("Error subscribing to entries:", error);
@@ -78,7 +86,7 @@
           try {
             const docRef = await addDoc(collection(db, COLLECTION_NAME), {
               ...entry,
-              createdAt: new Date(),
+              createdAt: Timestamp.now(),
             });
             console.log("Document written with ID: ", docRef.id);
             return docRef.id;
@@ -94,6 +102,7 @@
             await updateDoc(entryRef, {
               lineName: entry.lineName,
               gameId: entry.gameId,
+              updatedAt: Timestamp.now(), // Update modification timestamp
             });
             console.log("Document updated with ID: ", entry.id);
           } catch (e) {
@@ -138,12 +147,11 @@
               return;
             }
 
-            const newEntry = {
-              id: editingEntry ? editingEntry.id : '',
+            const formData = {
               lineName: lineName.trim(),
               gameId: gameId.trim(),
             };
-            onSave(newEntry);
+            onSave(formData, editingEntry?.id);
             setLineName('');
             setGameId('');
           }, [lineName, gameId, editingEntry, onSave, isFormValid]);
@@ -212,11 +220,30 @@
         };
 
         // components/EntryListItem.tsx content (JSX converted to React.createElement)
+        const formatTimestamp = (timestamp) => {
+          if (!timestamp) {
+            return 'N/A';
+          }
+          const date = timestamp.toDate();
+          return date.toLocaleString('zh-TW', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          });
+        };
+
         const EntryListItem = ({ entry, onEdit, onDelete }) => {
+          const displayTime = entry.updatedAt || entry.createdAt;
+
           return (
             React.createElement('tr', { className: "bg-white border-b border-gray-200 hover:bg-gray-50" },
               React.createElement('td', { className: "py-3 px-4 text-gray-800" }, entry.lineName),
               React.createElement('td', { className: "py-3 px-4 text-gray-800" }, entry.gameId),
+              React.createElement('td', { className: "py-3 px-4 text-gray-800 text-sm" }, formatTimestamp(displayTime)),
               React.createElement('td', { className: "py-3 px-4 text-right" },
                 React.createElement('button', {
                   onClick: () => onEdit(entry.id),
@@ -255,6 +282,7 @@
                   React.createElement('tr', null,
                     React.createElement('th', { className: "py-3 px-4" }, "Line 名字"),
                     React.createElement('th', { className: "py-3 px-4" }, "遊戲 ID"),
+                    React.createElement('th', { className: "py-3 px-4" }, "加入/修改 時間"),
                     React.createElement('th', { className: "py-3 px-4 text-right" }, "操作")
                   )
                 ),
@@ -273,6 +301,7 @@
           const [entries, setEntries] = useState([]);
           const [editingEntry, setEditingEntry] = useState(null);
           const [loading, setLoading] = useState(true);
+          const [searchTerm, setSearchTerm] = useState('');
 
           useEffect(() => {
             const unsubscribe = subscribeToEntries((fetchedEntries) => {
@@ -282,18 +311,27 @@
             return () => unsubscribe();
           }, []);
 
-          const handleSaveEntry = useCallback(async (entryToSave) => {
+          const handleSaveEntry = useCallback(async (formData, id) => {
             try {
-              if (editingEntry) {
-                await updateEntry(entryToSave);
-                setEditingEntry(null);
+              if (id) {
+                const existingEntry = entries.find(entry => entry.id === id);
+                if (existingEntry) {
+                  await updateEntry({
+                    ...existingEntry,
+                    lineName: formData.lineName,
+                    gameId: formData.gameId,
+                  });
+                  setEditingEntry(null);
+                } else {
+                  console.error(`Attempted to update entry with ID ${id} but it was not found.`);
+                }
               } else {
-                await addEntry({ lineName: entryToSave.lineName, gameId: entryToSave.gameId });
+                await addEntry(formData);
               }
             } catch (error) {
               console.error("Failed to save entry:", error);
             }
-          }, [editingEntry]);
+          }, [entries, editingEntry]);
 
           const handleEditEntry = useCallback((id) => {
             const entryToEdit = entries.find(entry => entry.id === id);
@@ -319,6 +357,14 @@
             setEditingEntry(null);
           }, []);
 
+          const filteredEntries = useMemo(() => {
+            const lowerCaseSearchTerm = searchTerm.toLowerCase();
+            return entries.filter(entry =>
+              entry.lineName.toLowerCase().includes(lowerCaseSearchTerm) ||
+              entry.gameId.toLowerCase().includes(lowerCaseSearchTerm)
+            );
+          }, [entries, searchTerm]);
+
           return (
             React.createElement('div', { className: "min-h-screen bg-gray-100 p-4 md:p-8" },
               React.createElement('div', { className: "max-w-4xl mx-auto" },
@@ -326,17 +372,27 @@
                   "KP 車隊 ID 申報處"
                 ),
                 React.createElement(EntryForm, { onSave: handleSaveEntry, editingEntry: editingEntry, onCancelEdit: handleCancelEdit }),
+                React.createElement('div', { className: "mb-6" },
+                  React.createElement('input', {
+                    type: "text",
+                    placeholder: "搜尋 Line 名字或遊戲 ID...",
+                    className: "w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                    value: searchTerm,
+                    onChange: (e) => setSearchTerm(e.target.value),
+                    'aria-label': "搜尋 Line 名字或遊戲 ID"
+                  })
+                ),
                 loading ? (
                   React.createElement('div', { className: "text-center text-gray-600 text-lg font-medium mt-8" }, "載入中...")
                 ) : (
-                  React.createElement(EntryList, { entries: entries, onEdit: handleEditEntry, onDelete: handleDeleteEntry })
+                  React.createElement(EntryList, { entries: filteredEntries, onEdit: handleEditEntry, onDelete: handleDeleteEntry })
                 )
               )
             )
           );
         }
 
-        // index.tsx content
+        // index.tsx content (main render logic)
         const rootElement = document.getElementById('root');
         if (!rootElement) {
           throw new Error("Could not find root element to mount to");
