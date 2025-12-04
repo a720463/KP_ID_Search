@@ -262,8 +262,45 @@
           );
         };
 
+        // EntryCardItem component (NEW)
+        const EntryCardItem = ({ entry, onEdit, onDelete }) => {
+          const displayTime = entry.updatedAt || entry.createdAt;
+
+          return (
+            React.createElement('div', { className: "bg-white shadow-md rounded-lg p-4 flex flex-col space-y-2 border border-gray-200" },
+              React.createElement('div', { className: "flex items-center" },
+                React.createElement('span', { className: "font-semibold text-gray-700 min-w-[70px] flex-shrink-0" }, "Line 名稱:"),
+                React.createElement('span', { className: "ml-2 text-indigo-700 font-bold text-lg flex-grow min-w-0 whitespace-nowrap overflow-hidden text-ellipsis" }, entry.lineName)
+              ),
+              React.createElement('div', { className: "flex items-center" },
+                React.createElement('span', { className: "font-semibold text-gray-700 min-w-[70px] flex-shrink-0" }, "遊戲 ID:"),
+                React.createElement('span', { className: "ml-2 text-gray-800 text-base flex-grow min-w-0 whitespace-nowrap overflow-hidden text-ellipsis" }, entry.gameId)
+              ),
+              React.createElement('div', { className: "flex items-center" },
+                React.createElement('span', { className: "font-semibold text-gray-700 min-w-[70px] flex-shrink-0" }, "時間:"),
+                React.createElement('span', { className: "ml-2 text-gray-600 text-sm flex-grow min-w-0 whitespace-nowrap overflow-hidden text-ellipsis" }, formatTimestamp(displayTime))
+              ),
+              React.createElement('div', { className: "flex justify-end space-x-2 mt-3" },
+                React.createElement('button', {
+                  onClick: () => onEdit(entry.id),
+                  className: "px-3 py-1 text-sm rounded-md font-medium text-white bg-blue-500 hover:bg-blue-600 transition duration-200"
+                },
+                  "編輯"
+                ),
+                React.createElement('button', {
+                  onClick: () => onDelete(entry.id),
+                  className: "px-3 py-1 text-sm rounded-md font-medium text-white bg-red-500 hover:bg-red-600 transition duration-200"
+                },
+                  "刪除"
+                )
+              )
+            )
+          );
+        };
+
+
         // components/EntryList.tsx content (JSX converted to React.createElement)
-        const EntryList = ({ entries, onEdit, onDelete }) => {
+        const EntryList = ({ entries, onEdit, onDelete, isMobile }) => {
           if (entries.length === 0) {
             return (
               React.createElement('div', { className: "bg-white shadow-md rounded-lg p-6 text-center text-gray-500" },
@@ -272,24 +309,37 @@
             );
           }
 
+          if (isMobile) {
+            return (
+              React.createElement('div', { className: "grid grid-cols-1 gap-4" },
+                entries.map((entry) => (
+                  React.createElement(EntryCardItem, { key: entry.id, entry: entry, onEdit: onEdit, onDelete: onDelete })
+                ))
+              )
+            );
+          }
+
           return (
-            React.createElement('div', { className: "bg-white shadow-md rounded-lg overflow-hidden" },
+            React.createElement('div', { className: "bg-white shadow-md rounded-lg" },
               React.createElement('h2', { className: "text-xl font-semibold p-6 text-indigo-800 border-b border-gray-200" },
                 "KP 車隊成員列表"
               ),
-              React.createElement('table', { className: "w-full text-left table-auto border-collapse" },
-                React.createElement('thead', { className: "bg-indigo-100 text-indigo-800 uppercase text-sm font-semibold" },
-                  React.createElement('tr', null,
-                    React.createElement('th', { className: "py-3 px-4" }, "Line 名字"),
-                    React.createElement('th', { className: "py-3 px-4" }, "遊戲 ID"),
-                    React.createElement('th', { className: "py-3 px-4" }, "加入/修改 時間"),
-                    React.createElement('th', { className: "py-3 px-4 text-right" }, "操作")
+              // New div for horizontal scrolling
+              React.createElement('div', { className: "overflow-x-auto" },
+                React.createElement('table', { className: "w-full text-left table-auto border-collapse" },
+                  React.createElement('thead', { className: "bg-indigo-100 text-indigo-800 uppercase text-sm font-semibold" },
+                    React.createElement('tr', null,
+                      React.createElement('th', { className: "py-3 px-4" }, "Line 名字"),
+                      React.createElement('th', { className: "py-3 px-4" }, "遊戲 ID"),
+                      React.createElement('th', { className: "py-3 px-4" }, "加入/修改 時間"),
+                      React.createElement('th', { className: "py-3 px-4 text-right" }, "操作")
+                    )
+                  ),
+                  React.createElement('tbody', null,
+                    entries.map((entry) => (
+                      React.createElement(EntryListItem, { key: entry.id, entry: entry, onEdit: onEdit, onDelete: onDelete })
+                    ))
                   )
-                ),
-                React.createElement('tbody', null,
-                  entries.map((entry) => (
-                    React.createElement(EntryListItem, { key: entry.id, entry: entry, onEdit: onEdit, onDelete: onDelete })
-                  ))
                 )
               )
             )
@@ -302,6 +352,22 @@
           const [editingEntry, setEditingEntry] = useState(null);
           const [loading, setLoading] = useState(true);
           const [searchTerm, setSearchTerm] = useState('');
+          const [isMobile, setIsMobile] = useState(false); // NEW: Mobile detection state
+
+          // NEW: Effect for mobile detection
+          useEffect(() => {
+            const mediaQuery = window.matchMedia('(max-width: 768px)');
+            const handleMediaQueryChange = (event) => {
+              setIsMobile(event.matches);
+            };
+
+            setIsMobile(mediaQuery.matches); // Set initial state
+            mediaQuery.addEventListener('change', handleMediaQueryChange);
+
+            return () => {
+              mediaQuery.removeEventListener('change', handleMediaQueryChange);
+            };
+          }, []);
 
           useEffect(() => {
             const unsubscribe = subscribeToEntries((fetchedEntries) => {
@@ -388,7 +454,7 @@
                 loading ? (
                   React.createElement('div', { className: "text-center text-gray-600 text-lg font-medium mt-8" }, "載入中...")
                 ) : (
-                  React.createElement(EntryList, { entries: filteredEntries, onEdit: handleEditEntry, onDelete: handleDeleteEntry })
+                  React.createElement(EntryList, { entries: filteredEntries, onEdit: handleEditEntry, onDelete: handleDeleteEntry, isMobile: isMobile }) // Pass isMobile
                 )
               )
             )
