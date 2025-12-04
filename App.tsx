@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Entry } from './types';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Entry, EntryFormData } from './types'; // Import EntryFormData
 import { subscribeToEntries, addEntry, updateEntry, deleteEntry } from './services/firebaseService'; // Import Firebase service
 import EntryForm from './components/EntryForm';
 import EntryList from './components/EntryList';
@@ -9,6 +9,7 @@ function App() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [loading, setLoading] = useState<boolean>(true); // New loading state
+  const [searchTerm, setSearchTerm] = useState<string>(''); // New search term state
 
   // Subscribe to Firebase entries on initial mount
   useEffect(() => {
@@ -21,22 +22,34 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleSaveEntry = useCallback(async (entryToSave: Entry) => {
+  // Fix: Adjusted handleSaveEntry to accept EntryFormData and an optional ID
+  const handleSaveEntry = useCallback(async (formData: EntryFormData, id?: string) => {
     try {
-      if (editingEntry) {
-        // Update existing entry in Firebase
-        await updateEntry(entryToSave);
-        setEditingEntry(null); // Clear editing state
+      if (id) {
+        // This is an update operation
+        // Find the existing entry to preserve its 'createdAt' timestamp
+        const existingEntry = entries.find(entry => entry.id === id);
+        if (existingEntry) {
+          await updateEntry({
+            ...existingEntry, // Keep existing id and createdAt
+            lineName: formData.lineName,
+            gameId: formData.gameId,
+          });
+          setEditingEntry(null); // Clear editing state after update
+        } else {
+          console.error(`Attempted to update entry with ID ${id} but it was not found.`);
+        }
       } else {
-        // Add new entry to Firebase
-        // Firebase will assign an ID, so we don't need to generate one here
-        await addEntry({ lineName: entryToSave.lineName, gameId: entryToSave.gameId });
+        // This is an add operation
+        // addEntry expects Omit<Entry, 'id' | 'createdAt' | 'updatedAt'>,
+        // which matches EntryFormData perfectly for the relevant fields.
+        await addEntry(formData);
       }
     } catch (error) {
       console.error("Failed to save entry:", error);
       // Optionally show an error message to the user
     }
-  }, [editingEntry]);
+  }, [entries]); // Dependency on 'entries' is needed to find 'existingEntry' for updates
 
   const handleEditEntry = useCallback((id: string) => {
     const entryToEdit = entries.find(entry => entry.id === id);
@@ -64,6 +77,15 @@ function App() {
     setEditingEntry(null);
   }, []);
 
+  // Filter entries based on search term
+  const filteredEntries = useMemo(() => {
+    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+    return entries.filter(entry =>
+      entry.lineName.toLowerCase().includes(lowerCaseSearchTerm) ||
+      entry.gameId.toLowerCase().includes(lowerCaseSearchTerm)
+    );
+  }, [entries, searchTerm]);
+
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
@@ -73,10 +95,21 @@ function App() {
 
         <EntryForm onSave={handleSaveEntry} editingEntry={editingEntry} onCancelEdit={handleCancelEdit} />
 
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="搜尋 Line 名字或遊戲 ID..."
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            aria-label="搜尋 Line 名字或遊戲 ID"
+          />
+        </div>
+
         {loading ? (
           <div className="text-center text-gray-600 text-lg font-medium mt-8">載入中...</div>
         ) : (
-          <EntryList entries={entries} onEdit={handleEditEntry} onDelete={handleDeleteEntry} />
+          <EntryList entries={filteredEntries} onEdit={handleEditEntry} onDelete={handleDeleteEntry} />
         )}
       </div>
     </div>

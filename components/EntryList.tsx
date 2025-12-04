@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Entry } from '../types';
 import EntryListItem from './EntryListItem';
@@ -28,6 +27,7 @@ const EntryList: React.FC<EntryListProps> = ({ entries, onEdit, onDelete }) => {
           <tr>
             <th className="py-3 px-4">Line 名字</th>
             <th className="py-3 px-4">遊戲 ID</th>
+            <th className="py-3 px-4">加入/修改 時間</th> {/* New table header */}
             <th className="py-3 px-4 text-right">操作</th>
           </tr>
         </thead>

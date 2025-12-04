@@ -1,6 +1,5 @@
-
 import { db } from '../firebaseConfig';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, orderBy, Timestamp } from 'firebase/firestore';
 import { Entry } from '../types';
 
 const COLLECTION_NAME = 'kpRacingTeamEntries'; // Firestore collection name
@@ -11,13 +10,20 @@ const COLLECTION_NAME = 'kpRacingTeamEntries'; // Firestore collection name
  * @returns {function(): void} An unsubscribe function to stop listening to updates.
  */
 export const subscribeToEntries = (callback: (entries: Entry[]) => void) => {
-  const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'asc')); // Order by creation time if available, otherwise by id or a default field.
+  // Order by createdAt to ensure consistent display order, new entries appear at the bottom
+  const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'asc')); 
   
   const unsubscribe = onSnapshot(q, (snapshot) => {
-    const entries: Entry[] = snapshot.docs.map(d => ({
-      id: d.id,
-      ...d.data()
-    } as Entry)); // Cast to Entry, assuming data matches interface
+    const entries: Entry[] = snapshot.docs.map(d => {
+        const data = d.data();
+        return {
+            id: d.id,
+            lineName: data.lineName,
+            gameId: data.gameId,
+            createdAt: data.createdAt as Timestamp, // Firebase returns Timestamp directly
+            updatedAt: data.updatedAt as Timestamp | undefined, // Firebase returns Timestamp directly, might be undefined
+        } as Entry;
+    });
     callback(entries);
   }, (error) => {
     console.error("Error subscribing to entries:", error);
@@ -29,13 +35,13 @@ export const subscribeToEntries = (callback: (entries: Entry[]) => void) => {
 
 /**
  * Adds a new entry to Firestore.
- * @param {Omit<Entry, 'id'>} entry - The entry data without an ID.
+ * @param {Omit<Entry, 'id' | 'createdAt' | 'updatedAt'>} entry - The entry data without an ID or timestamps.
  */
-export const addEntry = async (entry: Omit<Entry, 'id'>): Promise<string> => {
+export const addEntry = async (entry: Omit<Entry, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   try {
     const docRef = await addDoc(collection(db, COLLECTION_NAME), {
       ...entry,
-      createdAt: new Date(), // Add a timestamp for ordering
+      createdAt: Timestamp.now(), // Set creation timestamp
     });
     console.log("Document written with ID: ", docRef.id);
     return docRef.id;
@@ -55,6 +61,7 @@ export const updateEntry = async (entry: Entry): Promise<void> => {
     await updateDoc(entryRef, {
       lineName: entry.lineName,
       gameId: entry.gameId,
+      updatedAt: Timestamp.now(), // Update modification timestamp
     });
     console.log("Document updated with ID: ", entry.id);
   } catch (e) {

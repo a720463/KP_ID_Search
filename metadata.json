@@ -1,5 +1,5 @@
 {
   "name": "KP Racing Team ID Registry",
-  "description": "A simple web application for the KP Racing Team to register and manage member Line names and in-game IDs. Data is stored and synced across devices using Firebase Firestore for cross-platform access.",
+  "description": "A simple web application for the KP Racing Team to register and manage member Line names and in-game IDs. Data is stored and synced across devices using Firebase Firestore for cross-platform access. Includes a search function to filter entries by Line name or Game ID, and displays the creation or last modification time for each entry.",
   "requestFramePermissions": []
 }

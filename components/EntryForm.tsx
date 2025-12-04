@@ -1,9 +1,11 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Entry } from '../types';
+import { Entry, EntryFormData } from '../types';
 
 interface EntryFormProps {
-  onSave: (entry: Entry) => void;
+  // Fix: onSave now accepts EntryFormData and an optional ID for editing, aligning with how data is generated and consumed.
+  onSave: (formData: EntryFormData, id?: string) => void;
   editingEntry: Entry | null;
   onCancelEdit: () => void;
 }
@@ -33,12 +35,13 @@ const EntryForm: React.FC<EntryFormProps> = ({ onSave, editingEntry, onCancelEdi
       return;
     }
 
-    const newEntry: Entry = {
-      id: editingEntry ? editingEntry.id : '', // Firebase will assign ID for new entries, keep existing ID for edits
+    // Fix: Create EntryFormData object with only the fields the form directly provides.
+    const formData: EntryFormData = {
       lineName: lineName.trim(),
       gameId: gameId.trim(),
     };
-    onSave(newEntry);
+    // Fix: Pass formData and the ID of the entry being edited (if applicable) to onSave.
+    onSave(formData, editingEntry?.id);
     setLineName('');
     setGameId('');
   }, [lineName, gameId, editingEntry, onSave, isFormValid]);
