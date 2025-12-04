@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -403,6 +402,7 @@
             const entryToEdit = entries.find(entry => entry.id === id);
             if (entryToEdit) {
               setEditingEntry(entryToEdit);
+              window.scrollTo({ top: 0, behavior: 'smooth' }); // NEW: Scroll to top on edit
             }
           }, [entries]);
 
