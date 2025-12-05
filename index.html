@@ -389,6 +389,25 @@
           }, []);
 
           const handleSaveEntry = useCallback(async (formData, id) => {
+            // Normalize input for comparison (e.g., trim and toLowerCase)
+            const newLineName = formData.lineName.trim().toLowerCase();
+            const newGameId = formData.gameId.trim().toLowerCase();
+
+            // Check for duplicate
+            const isDuplicate = entries.some(entry => {
+              // If we are editing, skip checking against the entry being edited
+              if (id && entry.id === id) {
+                return false;
+              }
+              // Compare normalized lineName and gameId
+              return entry.lineName.toLowerCase() === newLineName && entry.gameId.toLowerCase() === newGameId;
+            });
+
+            if (isDuplicate) {
+              window.alert('資料重複：您輸入的 Line 名字和遊戲 ID 已存在。請檢查或修改。');
+              return; // Cancel the operation
+            }
+
             try {
               if (id) {
                 const existingEntry = entries.find(entry => entry.id === id);
@@ -407,8 +426,9 @@
               }
             } catch (error) {
               console.error("Failed to save entry:", error);
+              window.alert(`儲存資料失敗: ${error.message || '未知錯誤'}`);
             }
-          }, [entries]);
+          }, [entries, editingEntry]);
 
           const handleEditEntry = useCallback((id) => {
             const entryToEdit = entries.find(entry => entry.id === id);
@@ -511,7 +531,7 @@
           );
         }
 
-        // index.tsx content (main render logic)
+        // main render logic
         const rootElement = document.getElementById('root');
         if (!rootElement) {
           throw new Error("Could not find root element to mount to");
